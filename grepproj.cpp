@@ -2,13 +2,11 @@
 #include <fstream>
 #include <string>
 #include <regex>
-#include <vector>
-
+#include <vector>  
+#include <filesystem>
 class FileRead{
-    private:
-        std::ifstream file;
-
     public:
+        std::ifstream file;
         FileRead(std::string inputFile)
         {
             std::ifstream inputFileStream(inputFile);
@@ -33,16 +31,59 @@ class FileRead{
         {
             file.close();
         }
+};
 
-        void search(std::string pattern){
+class GrepCommands{
+    public:
+        bool incaseSensitive(std::string inputCommand){
+            return (inputCommand.find("i") != std::string::npos);
+        }
+
+        bool lineNumbers(std::string inputCommand){
+            return (inputCommand.find("n") != std::string::npos);
+        }
+
+        void search(std::string inputFile, std::string pattern, bool caseInsensitive = false, bool lineNumbers = false){
             std::string line;
             std::regex r(pattern);
+            FileRead fileToRead(inputFile);
+            int count = 0;
 
-            while(std::getline(file, line))
+            if(caseInsensitive)
             {
+                 std::regex r(pattern, std::regex_constants::icase);
+            }
+
+            while(std::getline(fileToRead.file, line))
+            {
+                count++;
                 if(std::regex_search(line, r))
                 {
-                    std::cout <<"Found this in file: " << line << std::endl;
+                    if(lineNumbers)
+                    {
+                        std::cout << "Found this in file(line Number " << count << ") :" << line << std::endl;
+                    }
+                    else
+                    {
+                        std::cout <<"Found this in file: " << line << std::endl;
+                    }
+                }
+            }
+        }
+
+        void searchRecursively(std::string folder, std::string pattern, bool caseInsensitive = false, bool lineNumbers = false)
+        {
+            for (const auto & entry : std::filesystem::directory_iterator(folder))
+            {
+                if(entry.is_directory())
+                {
+                    std::string folder = entry.path().string();
+                    searchRecursively(folder, pattern, caseInsensitive, lineNumbers);
+                }
+                else
+                {
+                    std::string file = entry.path().string();
+                    search(file, pattern, caseInsensitive, lineNumbers);
                 }
             }
         }
@@ -71,9 +112,13 @@ int main () {
     commands.push_back(command1);
 
     for(auto commandVector : commands) {
-        if(commandVector[1] == "-l") {
-            FileRead file(commandVector[3]);
-            file.search(commandVector[2]);
+        GrepCommands grep;
+        if(commandVector[1].find("-l") != std::string::npos) {
+            grep.search(commandVector[3], commandVector[2], grep.incaseSensitive(commandVector[1]), grep.lineNumbers(commandVector[1]));
+        }
+        if(commandVector[1].find("-r") != std::string::npos) {
+            std::string folderToSearch = std::filesystem::current_path().string();
+            grep.searchRecursively(folderToSearch, commandVector[2], grep.incaseSensitive(commandVector[1]), grep.lineNumbers(commandVector[1]));
         }
     }
     return 0;
