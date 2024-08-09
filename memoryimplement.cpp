@@ -1,56 +1,110 @@
 #include <iostream>
 #include <cstring>
 
+class Pointer {
+    public:
+        size_t size = 0;
+        Pointer* next;
+        bool isFree = true;
+        Pointer(size_t size) : size(size), next(nullptr) {};
+};
 
-void* malloc(size_t size) {
-    return operator new(size);
-}
+class Allocator {
+    private:
+        size_t poolSize;
+        Pointer* pointerList;
 
-void* calloc(size_t num, size_t size) {
-    void* ptr = operator new(num * size);
-    std::memset(ptr, 0, num * size);
-    return ptr;
-}
+    public:
+        Allocator(size_t size): poolSize(size), pointerList(nullptr) {
+            pointerList = new Pointer(size);
+        }
 
-void free(void* ptr) {
-    operator delete(ptr);
-}
+        Pointer* createBlock(size_t blocksize, Pointer* current) {
+            Pointer* newBlock = current;
+            Pointer* temp = newBlock;
+            int headSize = temp->size-blocksize;
+            int size = blocksize;
 
-void* realloc(void* ptr, size_t size) {
-    void* newPtr = operator new(size);
-    std::memcpy(newPtr, ptr, size);
-    operator delete(ptr);
-    return newPtr;
-}
+            while(size>0) {
+                if(temp->next==nullptr) {
+                    temp->next = new Pointer(poolSize);
+                }
+                temp->size = headSize;
+                temp->isFree = false;
+                temp->next = current->next;
+                current = current->next;
+                temp = temp->next;
+                size--;
+            }
+            return newBlock;
+        }
+
+        void* allocate(size_t size) {
+            if (poolSize < 0) {
+                std::cout << "Memory allocation failed" << std::endl;
+                return nullptr;
+            }
+            std::cout << "Memory allocated successfully" << std::endl;
+            Pointer* current = pointerList;
+            
+            while (true) {
+                if(current->size >= size && current->isFree) {
+                    poolSize = poolSize - size;
+                    return createBlock(size, current);;
+                } 
+                else
+                {
+                    if(current->next == nullptr) {
+                        current->next = new Pointer(poolSize);
+                    }
+                    current = current->next;
+                }
+                
+            }
+            return nullptr;
+        }
+
+        void deallocate(void* ptr) {
+            Pointer* current = pointerList;
+            Pointer* prev = nullptr;
+            int pointerFree = 0;
+            while(current) {
+                if(current == ptr) {
+                    int size = current->size;
+                    while(size == current->size) {
+                        pointerFree++;
+                        current->isFree = true;
+                        current = current->next;
+                    }
+                    poolSize = poolSize + pointerFree;
+                    return;
+                }
+                prev = current;
+                current = current->next;
+            }
+        }
+
+};
+
+class Myobj {
+    public:
+        void* allocation(Allocator& allocator, int size) 
+        {
+            return allocator.allocate(size);
+        }
+
+        void deleteAllocation(Allocator& allocator, void* ptr)
+        {
+            allocator.deallocate(ptr);
+        }
+};
 
 int main() {
-    
-    int* arr1 = static_cast<int*>(malloc(5 * sizeof(int)));
-    for (int i = 0; i < 5; ++i) {
-        arr1[i] = i + 1;
-    }
-    for (int i = 0; i < 5; ++i) {
-        std::cout << arr1[i] << " ";
-    }
-    std::cout << std::endl;
-    free(arr1);
 
-    int* arr2 = static_cast<int*>(calloc(5, sizeof(int)));
-    for (int i = 0; i < 5; ++i) {
-        std::cout << arr2[i] << " ";
-    }
-    std::cout << std::endl;
-
-    int* arr3 = static_cast<int*>(realloc(arr2,  10 * sizeof(int)));
-
-    for (int i = 0; i < 10; ++i) {
-        arr3[i] = i + 1;
-    }
-
-    for (int i = 0; i < 10; ++i) {
-        std::cout << arr3[i] << " ";
-    }
-
-    free(arr3);
+    Allocator allocate(30);
+    Myobj obj1;
+    void* a = obj1.allocation(allocate, 10);
+    void* b = obj1.allocation(allocate, 20);
+    obj1.deleteAllocation(allocate, a);
     return 0;
 }
